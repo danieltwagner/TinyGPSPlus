@@ -27,9 +27,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <ctype.h>
 #include <stdlib.h>
 
-#define _RMCterm "RMC"
-#define _GGAterm "GGA"
-
 #if !defined(ARDUINO) && !defined(__AVR__)
 // Alternate implementation of millis() that relies on std
 unsigned long millis()
@@ -47,6 +44,7 @@ TinyGPSPlus::TinyGPSPlus()
   :  parity(0)
   ,  isChecksumTerm(false)
   ,  curSentenceType(GPS_SENTENCE_OTHER)
+  ,  curSentenceSystem(GPS_SYSTEM_GPS)
   ,  curTermNumber(0)
   ,  curTermOffset(0)
   ,  sentenceHasFix(false)
@@ -93,6 +91,7 @@ bool TinyGPSPlus::encode(char c)
     curTermNumber = curTermOffset = 0;
     parity = 0;
     curSentenceType = GPS_SENTENCE_OTHER;
+    curSentenceSystem = GPS_SYSTEM_GPS;
     isChecksumTerm = false;
     sentenceHasFix = false;
     return false;
@@ -201,6 +200,15 @@ bool TinyGPSPlus::endOfTermHandler()
         satellites.commit();
         hdop.commit();
         break;
+      case GPS_SENTENCE_GSV:
+        satellitesStats.commit();
+        break;
+      case GPS_SENTENCE_GSA:
+        if (!satellitesStats.snrDataPresent) {
+          satellitesStats.commit();
+        }
+        hdop.commit();
+        break;
       }
 
       // Commit all custom listeners of this sentence type
@@ -220,12 +228,7 @@ bool TinyGPSPlus::endOfTermHandler()
   // the first term determines the sentence type
   if (curTermNumber == 0)
   {
-    if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _RMCterm))
-      curSentenceType = GPS_SENTENCE_RMC;
-    else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GGAterm))
-      curSentenceType = GPS_SENTENCE_GGA;
-    else
-      curSentenceType = GPS_SENTENCE_OTHER;
+    parseSentenceType(term);
 
     // Any custom candidates of this sentence type?
     for (customCandidates = customElts; customCandidates != NULL && strcmp(customCandidates->sentenceName, term) < 0; customCandidates = customCandidates->next);
@@ -235,63 +238,98 @@ bool TinyGPSPlus::endOfTermHandler()
     return false;
   }
 
-  if (curSentenceType != GPS_SENTENCE_OTHER && term[0])
+  if (curSentenceType != GPS_SENTENCE_OTHER && term[0]) {
     switch(COMBINE(curSentenceType, curTermNumber))
-  {
-    case COMBINE(GPS_SENTENCE_RMC, 1): // Time in both sentences
-    case COMBINE(GPS_SENTENCE_GGA, 1):
-      time.setTime(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 2): // RMC validity
-      sentenceHasFix = term[0] == 'A';
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 3): // Latitude
-    case COMBINE(GPS_SENTENCE_GGA, 2):
-      location.setLatitude(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 4): // N/S
-    case COMBINE(GPS_SENTENCE_GGA, 3):
-      location.rawNewLatData.negative = term[0] == 'S';
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 5): // Longitude
-    case COMBINE(GPS_SENTENCE_GGA, 4):
-      location.setLongitude(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 6): // E/W
-    case COMBINE(GPS_SENTENCE_GGA, 5):
-      location.rawNewLngData.negative = term[0] == 'W';
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 7): // Speed (RMC)
-      speed.set(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 8): // Course (RMC)
-      course.set(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 9): // Date (RMC)
-      date.setDate(term);
-      break;
-    case COMBINE(GPS_SENTENCE_GGA, 6): // Fix data (GGA)
-      sentenceHasFix = term[0] > '0';
-      location.newFixQuality = (TinyGPSLocation::Quality)term[0];
-      break;
-    case COMBINE(GPS_SENTENCE_GGA, 7): // Satellites used (GGA)
-      satellites.set(term);
-      break;
-    case COMBINE(GPS_SENTENCE_GGA, 8): // HDOP
-      hdop.set(term);
-      break;
-    case COMBINE(GPS_SENTENCE_GGA, 9): // Altitude (GGA)
-      altitude.set(term);
-      break;
-    case COMBINE(GPS_SENTENCE_RMC, 12):
-      location.newFixMode = (TinyGPSLocation::Mode)term[0];
-      break;
+    {
+      case COMBINE(GPS_SENTENCE_RMC, 1): // Time in both sentences
+      case COMBINE(GPS_SENTENCE_GGA, 1):
+        time.setTime(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 2): // GPRMC validity
+        sentenceHasFix = term[0] == 'A';
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 3): // Latitude
+      case COMBINE(GPS_SENTENCE_GGA, 2):
+        location.setLatitude(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 4): // N/S
+      case COMBINE(GPS_SENTENCE_GGA, 3):
+        location.rawNewLatData.negative = term[0] == 'S';
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 5): // Longitude
+      case COMBINE(GPS_SENTENCE_GGA, 4):
+        location.setLongitude(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 6): // E/W
+      case COMBINE(GPS_SENTENCE_GGA, 5):
+        location.rawNewLngData.negative = term[0] == 'W';
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 7): // Speed (GPRMC)
+        speed.set(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 8): // Course (GPRMC)
+        course.set(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 9): // Date (GPRMC)
+        date.setDate(term);
+        break;
+      case COMBINE(GPS_SENTENCE_GGA, 6): // Fix data (GPGGA)
+        sentenceHasFix = term[0] > '0';
+        location.newFixQuality = sentenceHasFix ? (FixQuality)(term[0] - '0') : Invalid;
+        break;
+      case COMBINE(GPS_SENTENCE_GGA, 7): // Satellites used (GPGGA)
+        satellites.set(term);
+        break;
+      case COMBINE(GPS_SENTENCE_GGA, 8): // HDOP
+      case COMBINE(GPS_SENTENCE_GSA, 16): // HDOP
+        hdop.set(term);
+        break;
+      case COMBINE(GPS_SENTENCE_GGA, 9): // Altitude (GPGGA)
+        altitude.set(term);
+        break;
+      case COMBINE(GPS_SENTENCE_RMC, 12):
+        location.newFixMode = (FixMode)term[0];
+        break;
+      case COMBINE(GPS_SENTENCE_GSV, 2): // GSV message index
+        satellitesStats.setMessageSeqNr(term, curSentenceSystem);
+        break;
+      case COMBINE(GPS_SENTENCE_GSV, 4): // GSV satellite PRN number
+      case COMBINE(GPS_SENTENCE_GSV, 8):
+      case COMBINE(GPS_SENTENCE_GSV, 12):
+      case COMBINE(GPS_SENTENCE_GSV, 16):
+        satellitesStats.setSatId(term);
+        break;
+      case COMBINE(GPS_SENTENCE_GSV, 7): // GSV satellite SNR
+      case COMBINE(GPS_SENTENCE_GSV, 11):
+      case COMBINE(GPS_SENTENCE_GSV, 15):
+      case COMBINE(GPS_SENTENCE_GSV, 19):
+        satellitesStats.setSatSNR(term);
+        break;
+    }
+    // GSA messages have the items sequential, so handle them separately
+    if (curSentenceType == GPS_SENTENCE_GSA)
+    {
+      if (!satellitesStats.snrDataPresent)
+      {
+        // GSA messages may only be used when no GSV messages are being processed.
+        // Satellite IDs in GSA messages may be in different order compared to GSV messages.
+        if (curTermNumber >= 3 && curTermNumber <= 14)
+        {
+          satellitesStats.setSatId(term);
+        }
+      }
+    }
   }
 
   // Set custom values as needed
-  for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0 && p->termNumber <= curTermNumber; p = p->next)
-    if (p->termNumber == curTermNumber)
-         p->set(term);
+  for (TinyGPSCustom *p = customCandidates;
+       p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0 && p->termNumber <= curTermNumber;
+       p = p->next)
+       {
+         if (p->termNumber == curTermNumber) {
+            p->set(term);
+         }
+       }
 
   return false;
 }
@@ -383,6 +421,23 @@ double TinyGPSLocation::lng()
    return rawLngData.negative ? -ret : ret;
 }
 
+void TinyGPSSatellites::commit()
+{
+  satsUsed = 0;
+  bestSNR = 0;
+  for (byte i = 0; i < _GPS_MAX_ARRAY_LENGTH; ++i) {
+    if ((id[i] != 0) && (snrDataPresent || (snr[i] != 0))) {
+      ++satsUsed;
+      if (snr[i] > bestSNR) {
+        bestSNR = snr[i];
+      }
+    }
+  }
+  pos = -1;
+  lastCommitTime = millis();
+  valid = updated = true;
+}
+
 void TinyGPSDate::commit()
 {
    date = newDate;
@@ -395,6 +450,40 @@ void TinyGPSTime::commit()
    time = newTime;
    lastCommitTime = millis();
    valid = updated = true;
+}
+
+void TinyGPSSatellites::setSatId(const char *term)
+{
+   if (pos < _GPS_MAX_ARRAY_LENGTH) {
+      ++pos;
+      uint32_t value = atol(term);
+      if (id[pos] != value) {
+        id[pos] = static_cast<byte>(value);
+        snr[pos] = 0;
+      }
+   }
+}
+
+void TinyGPSSatellites::setSatSNR(const char *term)
+{
+   if (pos < _GPS_MAX_ARRAY_LENGTH) {
+      // Do not increase pos, GSV line has ID first and other parameters later
+      snr[pos] = atol(term);
+      snrDataPresent = true;
+   }
+}
+
+void TinyGPSSatellites::setMessageSeqNr(const char *term, uint8_t sentenceSystem)
+{
+   int32_t seqNr = atol(term);
+   int32_t newPos = (seqNr - 1) * 4 + (sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES);
+   if (newPos >= 0 && newPos < _GPS_MAX_ARRAY_LENGTH) {
+     for (byte i = newPos; i < (newPos + 4) && i < _GPS_MAX_ARRAY_LENGTH; ++i) {
+       id[i] = 0;
+       snr[i] = 0;
+     }
+     pos = static_cast<int8_t>(newPos - 1); // setSatId will increment pos first.
+   }
 }
 
 void TinyGPSTime::setTime(const char *term)
@@ -503,6 +592,38 @@ void TinyGPSCustom::set(const char *term)
 {
    strncpy(this->stagingBuffer, term, sizeof(this->stagingBuffer) - 1);
 }
+
+void TinyGPSPlus::parseSentenceType(const char *term)
+{
+  curSentenceType = GPS_SENTENCE_OTHER;
+  curSentenceSystem = GPS_SYSTEM_GPS;
+  size_t length = strlen(term);
+  if (length < 5 || term[0] != 'G') {
+    return;
+  }
+  switch (term[1]) {
+    case 'L': curSentenceSystem = GPS_SYSTEM_GLONASS; break;
+    case 'A': curSentenceSystem = GPS_SYSTEM_GALILEO; break;
+    case 'B': curSentenceSystem = GPS_SYSTEM_BEIDOU;  break;
+  }
+  if (strcmp(&term[2], "RMC") == 0)
+  {
+    curSentenceType = GPS_SENTENCE_RMC;
+  }
+  else if (strcmp(&term[2], "GGA") == 0)
+  {
+    curSentenceType = GPS_SENTENCE_GGA;
+  }
+  else if (strcmp(&term[2], "GSA") == 0)
+  {
+    curSentenceType = GPS_SENTENCE_GSA;
+  }
+  else if (strcmp(&term[2], "GSV") == 0)
+  {
+    curSentenceType = GPS_SENTENCE_GSV;
+  }
+}
+
 
 void TinyGPSPlus::insertCustom(TinyGPSCustom *pElt, const char *sentenceName, int termNumber)
 {
