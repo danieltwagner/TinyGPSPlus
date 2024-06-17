@@ -275,7 +275,7 @@ bool TinyGPSPlus::endOfTermHandler()
         break;
       case COMBINE(GPS_SENTENCE_GGA, 6): // Fix data (GPGGA)
         sentenceHasFix = term[0] > '0';
-        location.newFixQuality = sentenceHasFix ? (FixQuality)(term[0] - '0') : Invalid;
+        location.newFixQuality = (TinyGPSLocation::Quality)term[0];
         break;
       case COMBINE(GPS_SENTENCE_GGA, 7): // Satellites used (GPGGA)
         satellites.set(term);
@@ -288,7 +288,7 @@ bool TinyGPSPlus::endOfTermHandler()
         altitude.set(term);
         break;
       case COMBINE(GPS_SENTENCE_RMC, 12):
-        location.newFixMode = (FixMode)term[0];
+        location.newFixMode = (TinyGPSLocation::Mode)term[0];
         break;
       case COMBINE(GPS_SENTENCE_GSV, 2): // GSV message index
         satellitesStats.setMessageSeqNr(term, curSentenceSystem);
