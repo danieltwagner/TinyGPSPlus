@@ -91,9 +91,9 @@ public:
   bool isValid() const       { return valid; }
   bool isUpdated() const     { return updated; }
   uint32_t age() const       { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
-  uint8_t nrSatsTracked() const { return satsTracked; }
-  uint8_t nrSatsVisible() const { return satsVisible; }
-  uint8_t getBestSNR() const { return bestSNR; }
+  uint8_t nrSatsTracked() { updated = false; return satsTracked; }
+  uint8_t nrSatsVisible() { updated = false; return satsVisible; }
+  uint8_t getBestSNR() { updated = false; return bestSNR; }
 
   TinyGPSSatellites() : valid(false), updated(false), pos(-1), bestSNR(0), satsTracked(0), satsVisible(0), snrDataPresent(false)
   {}
