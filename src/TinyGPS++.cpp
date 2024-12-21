@@ -620,14 +620,22 @@ void TinyGPSPlus::parseSentenceType(const char *term)
   curSentenceType = GPS_SENTENCE_OTHER;
   curSentenceSystem = GPS_SYSTEM_GPS;
   size_t length = strlen(term);
-  if (length < 5 || term[0] != 'G') {
+  if (length < 5) {
     return;
   }
-  switch (term[1]) {
-    case 'L': curSentenceSystem = GPS_SYSTEM_GLONASS; break;
-    case 'A': curSentenceSystem = GPS_SYSTEM_GALILEO; break;
-    case 'B': curSentenceSystem = GPS_SYSTEM_BEIDOU;  break;
+  if (term[0] == 'G') {
+    switch (term[1]) {
+      case 'L': curSentenceSystem = GPS_SYSTEM_GLONASS; break;
+      case 'A': curSentenceSystem = GPS_SYSTEM_GALILEO; break;
+      case 'B': curSentenceSystem = GPS_SYSTEM_BEIDOU;  break;
+    }
+  } else if (strcmp(&term[0], "BD") == 0) {
+    curSentenceSystem = GPS_SYSTEM_BEIDOU;
+  } else {
+    // Not a recognized system
+    return;
   }
+  
   if (strcmp(&term[2], "RMC") == 0)
   {
     curSentenceType = GPS_SENTENCE_RMC;
