@@ -53,6 +53,13 @@ public:
    {}
 };
 
+enum class TinyGPSSystem : uint8_t {
+   GPS = 0, // GP: GPS, SBAS, QZSS  & GN: Any combination of GNSS
+   GLONASS,
+   GALILEO,
+   BEIDOU,
+};
+
 struct TinyGPSLocation
 {
    friend class TinyGPSPlus;
@@ -127,7 +134,7 @@ private:
 
    // GSV messages form a sequence, so the initial position in the array must
    // be set before inserting values.
-   void setMessageSeqNr(const char *term, uint8_t sentenceSystem);
+   void setMessageSeqNr(const char *term, TinyGPSSystem sentenceSystem);
 
    // Sets the total number of messages for the current sentence system (GPS, GLONASS, etc.)
    // commit() will only process the data when the last message is received.
@@ -317,13 +324,6 @@ private:
 
     GPS_SENTENCE_OTHER};
 
-  enum gps_systems {
-    GPS_SYSTEM_GPS = 0, // GP: GPS, SBAS, QZSS  & GN: Any combination of GNSS
-    GPS_SYSTEM_GLONASS,
-    GPS_SYSTEM_GALILEO,
-    GPS_SYSTEM_BEIDOU
-  };
-
   void parseSentenceType(const char *term);
 
   // parsing state variables
@@ -331,7 +331,7 @@ private:
   bool isChecksumTerm;
   char term[_GPS_MAX_FIELD_SIZE];
   uint8_t curSentenceType;
-  uint8_t curSentenceSystem;
+  TinyGPSSystem curSentenceSystem;
   uint8_t curTermNumber;
   uint8_t curTermOffset;
   bool sentenceHasFix;

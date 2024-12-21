@@ -44,7 +44,7 @@ TinyGPSPlus::TinyGPSPlus()
   :  parity(0)
   ,  isChecksumTerm(false)
   ,  curSentenceType(GPS_SENTENCE_OTHER)
-  ,  curSentenceSystem(GPS_SYSTEM_GPS)
+  ,  curSentenceSystem(TinyGPSSystem::GPS)
   ,  curTermNumber(0)
   ,  curTermOffset(0)
   ,  sentenceHasFix(false)
@@ -91,7 +91,7 @@ bool TinyGPSPlus::encode(char c)
     curTermNumber = curTermOffset = 0;
     parity = 0;
     curSentenceType = GPS_SENTENCE_OTHER;
-    curSentenceSystem = GPS_SYSTEM_GPS;
+    curSentenceSystem = TinyGPSSystem::GPS;
     isChecksumTerm = false;
     sentenceHasFix = false;
     return false;
@@ -290,11 +290,11 @@ bool TinyGPSPlus::endOfTermHandler()
       case COMBINE(GPS_SENTENCE_RMC, 12):
         location.newFixMode = (TinyGPSLocation::Mode)term[0];
         break;
+      case COMBINE(GPS_SENTENCE_GSV, 1): // GSV message index
+        satellitesStats.setNumMessages(term);
+        break;
       case COMBINE(GPS_SENTENCE_GSV, 2): // GSV message index
         satellitesStats.setMessageSeqNr(term, curSentenceSystem);
-        break;
-      case COMBINE(GPS_SENTENCE_GSV, 3): // GSV message index
-        satellitesStats.setNumMessages(term);
         break;
       case COMBINE(GPS_SENTENCE_GSV, 4): // GSV satellite PRN number
       case COMBINE(GPS_SENTENCE_GSV, 8):
@@ -466,7 +466,7 @@ void TinyGPSTime::commit()
 
 void TinyGPSSatellites::setSatId(const char *term)
 {
-   if (pos < _GPS_MAX_ARRAY_LENGTH) {
+   if (pos < _GPS_MAX_ARRAY_LENGTH - 1) {
       ++pos;
       uint32_t value = atol(term);
       if (id[pos] != value) {
@@ -490,22 +490,19 @@ void TinyGPSSatellites::setNumMessages(const char *term)
    numMsgs = atol(term);
 }
 
-void TinyGPSSatellites::setMessageSeqNr(const char *term, uint8_t sentenceSystem)
+void TinyGPSSatellites::setMessageSeqNr(const char *term, TinyGPSSystem sentenceSystem)
 {
    seqNr = atol(term);
+   uint8_t systemStart = static_cast<uint8_t>(sentenceSystem) * _GPS_MAX_NR_ACTIVE_SATELLITES;
    if (seqNr == 1) {
       // Clear the array
-      byte arrStart = sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES;
-      byte arrEnd = arrStart + _GPS_MAX_NR_ACTIVE_SATELLITES;
-      for (byte i = arrStart; i < arrEnd; ++i) {
+      byte systemEnd = systemStart + _GPS_MAX_NR_ACTIVE_SATELLITES;
+      for (byte i = systemStart; i < systemEnd; ++i) {
          id[i] = 0;
          snr[i] = 0;
       }
    }
-   int32_t newPos = (seqNr - 1) * 4 + (sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES);
-   if (newPos >= 0 && newPos < _GPS_MAX_ARRAY_LENGTH) {
-      pos = static_cast<int8_t>(newPos - 1); // setSatId will increment pos first.
-   }
+   pos = systemStart + (seqNr - 1) * 4;
 }
 
 void TinyGPSTime::setTime(const char *term)
@@ -618,24 +615,25 @@ void TinyGPSCustom::set(const char *term)
 void TinyGPSPlus::parseSentenceType(const char *term)
 {
   curSentenceType = GPS_SENTENCE_OTHER;
-  curSentenceSystem = GPS_SYSTEM_GPS;
+  curSentenceSystem = TinyGPSSystem::GPS;
   size_t length = strlen(term);
   if (length < 5) {
     return;
   }
   if (term[0] == 'G') {
     switch (term[1]) {
-      case 'L': curSentenceSystem = GPS_SYSTEM_GLONASS; break;
-      case 'A': curSentenceSystem = GPS_SYSTEM_GALILEO; break;
-      case 'B': curSentenceSystem = GPS_SYSTEM_BEIDOU;  break;
+      case 'L': curSentenceSystem = TinyGPSSystem::GLONASS; break;
+      case 'A': curSentenceSystem = TinyGPSSystem::GALILEO; break;
+      case 'B': curSentenceSystem = TinyGPSSystem::BEIDOU;  break;
     }
-  } else if (strcmp(&term[0], "BD") == 0) {
-    curSentenceSystem = GPS_SYSTEM_BEIDOU;
+  } else if (term[0] == 'B' && term[1] == 'D') {
+    // Alternative encoding for BeiDou
+    curSentenceSystem = TinyGPSSystem::BEIDOU;
   } else {
     // Not a recognized system
     return;
   }
-  
+
   if (strcmp(&term[2], "RMC") == 0)
   {
     curSentenceType = GPS_SENTENCE_RMC;
