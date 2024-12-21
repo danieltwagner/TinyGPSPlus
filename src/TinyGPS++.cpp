@@ -293,6 +293,9 @@ bool TinyGPSPlus::endOfTermHandler()
       case COMBINE(GPS_SENTENCE_GSV, 2): // GSV message index
         satellitesStats.setMessageSeqNr(term, curSentenceSystem);
         break;
+      case COMBINE(GPS_SENTENCE_GSV, 3): // GSV message index
+        satellitesStats.setNumMessages(term);
+        break;
       case COMBINE(GPS_SENTENCE_GSV, 4): // GSV satellite PRN number
       case COMBINE(GPS_SENTENCE_GSV, 8):
       case COMBINE(GPS_SENTENCE_GSV, 12):
@@ -423,6 +426,11 @@ double TinyGPSLocation::lng()
 
 void TinyGPSSatellites::commit()
 {
+  if (seqNr < numMsgs) {
+    // this is the end of a message but there are more coming
+    return;
+  }
+
   satsTracked = 0;
   satsVisible = 0;
   bestSNR = 0;
@@ -477,9 +485,14 @@ void TinyGPSSatellites::setSatSNR(const char *term)
    }
 }
 
+void TinyGPSSatellites::setNumMessages(const char *term)
+{
+   numMsgs = atol(term);
+}
+
 void TinyGPSSatellites::setMessageSeqNr(const char *term, uint8_t sentenceSystem)
 {
-   int32_t seqNr = atol(term);
+   seqNr = atol(term);
    if (seqNr == 1) {
       // Clear the array
       byte arrStart = sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES;

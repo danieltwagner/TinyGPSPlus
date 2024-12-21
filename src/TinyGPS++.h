@@ -113,6 +113,8 @@ private:
    GPS and Beidou satellites are differentiated by the GP and BD prefix.
    */
    int8_t pos; // Use signed int, only increase pos to set satellite ID
+   int8_t seqNr;   // used with numSeqs to commit only when the last GSV message is read
+   int8_t numMsgs; // number of messages in the current setence system (GPS, GLONASS, etc.)
    uint8_t bestSNR;
    uint8_t satsTracked;
    uint8_t satsVisible;
@@ -126,6 +128,10 @@ private:
    // GSV messages form a sequence, so the initial position in the array must
    // be set before inserting values.
    void setMessageSeqNr(const char *term, uint8_t sentenceSystem);
+
+   // Sets the total number of messages for the current sentence system (GPS, GLONASS, etc.)
+   // commit() will only process the data when the last message is received.
+   void setNumMessages(const char *term);
 };
 
 struct TinyGPSDate
