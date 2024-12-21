@@ -40,7 +40,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define _GPS_MAX_FIELD_SIZE 15
 #define _GPS_EARTH_MEAN_RADIUS 6371009 // old: 6372795
 #define _GPS_MAX_NR_ACTIVE_SATELLITES 16  // NMEA allows upto 12, some receivers report more using GSV strings
-#define _GPS_MAX_NR_SYSTEMS  3   // GPS, GLONASS, GALILEO
+#define _GPS_MAX_NR_SYSTEMS  4   // GPS, GLONASS, GALILEO, BEIDOU
 #define _GPS_MAX_ARRAY_LENGTH  (_GPS_MAX_NR_ACTIVE_SATELLITES * _GPS_MAX_NR_SYSTEMS)
 
 struct RawDegrees
@@ -311,7 +311,7 @@ private:
 
     GPS_SENTENCE_OTHER};
 
-  enum {
+  enum gps_systems {
     GPS_SYSTEM_GPS = 0, // GP: GPS, SBAS, QZSS  & GN: Any combination of GNSS
     GPS_SYSTEM_GLONASS,
     GPS_SYSTEM_GALILEO,

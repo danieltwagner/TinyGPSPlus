@@ -480,13 +480,18 @@ void TinyGPSSatellites::setSatSNR(const char *term)
 void TinyGPSSatellites::setMessageSeqNr(const char *term, uint8_t sentenceSystem)
 {
    int32_t seqNr = atol(term);
+   if (seqNr == 1) {
+      // Clear the array
+      byte arrStart = sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES;
+      byte arrEnd = arrStart + _GPS_MAX_NR_ACTIVE_SATELLITES;
+      for (byte i = arrStart; i < arrEnd; ++i) {
+         id[i] = 0;
+         snr[i] = 0;
+      }
+   }
    int32_t newPos = (seqNr - 1) * 4 + (sentenceSystem * _GPS_MAX_NR_ACTIVE_SATELLITES);
    if (newPos >= 0 && newPos < _GPS_MAX_ARRAY_LENGTH) {
-     for (byte i = newPos; i < (newPos + 4) && i < _GPS_MAX_ARRAY_LENGTH; ++i) {
-       id[i] = 0;
-       snr[i] = 0;
-     }
-     pos = static_cast<int8_t>(newPos - 1); // setSatId will increment pos first.
+      pos = static_cast<int8_t>(newPos - 1); // setSatId will increment pos first.
    }
 }
 
